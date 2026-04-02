@@ -1,0 +1,246 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#map {
+    width: 100%;
+    height: 100vh;
+}
+
+/* Tùy chỉnh Popup để trông hiện đại hơn */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.popup-custom {
+    text-align: center;
+}
+
+.popup-custom img {
+    width: 100%;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.popup-custom h3 {
+    margin: 5px 0;
+    color: #333;
+}
+
+.popup-custom .category-badge {
+    background: #e74c3c;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.popup-buttons {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 15px;
+}
+
+.popup-buttons a {
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    transition: 0.3s;
+}
+
+.btn-yandex { background-color: #ff0000; }
+.btn-google { background-color: #4285F4; }
+.btn-review { background-color: #27ae60; width: 100%; margin-top: 5px; display: block;}
+
+.btn-yandex:hover, .btn-google:hover, .btn-review:hover {
+    opacity: 0.8;
+}
+
+/* Styling cho Tên địa điểm hiển thị trực tiếp trên bản đồ */
+.custom-label {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #2c3e50;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    font-size: 11px;
+    white-space: nowrap;
+    padding: 2px 5px;
+}
+
+/* Ẩn mũi tên mặc định của Tooltip cho gọn */
+.leaflet-tooltip-bottom:before {
+    display: none;
+}
+
+/* Styling cho phần đa ngôn ngữ trong Popup */
+.lang-block {
+    text-align: left;
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.lang-block span.flag {
+    font-size: 16px;
+    margin-right: 5px;
+}
+.popup-custom h4 {
+    margin: 5px 0;
+    color: #555;
+    font-size: 14px;
+}
+/* Vùng chứa toàn bộ review có thanh cuộn nếu quá dài */
+.reviews-container {
+    max-height: 150px; /* Giới hạn chiều cao */
+    overflow-y: auto;  /* Tự động hiện thanh cuộn dọc */
+    margin-bottom: 10px;
+    padding-right: 5px;
+    border-top: 1px dashed #ccc;
+    padding-top: 10px;
+}
+
+/* Tùy chỉnh thanh cuộn cho thanh lịch */
+.reviews-container::-webkit-scrollbar {
+    width: 5px;
+}
+.reviews-container::-webkit-scrollbar-thumb {
+    background: #bdc3c7; 
+    border-radius: 5px;
+}
+
+/* Style cho các dòng Text Review (Trích dẫn) */
+.text-review {
+    background: #f8f9fa;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 6px;
+    border-left: 3px solid #f39c12;
+    text-align: left;
+    font-style: italic;
+    white-space: pre-line; /* Cực kỳ quan trọng: Lệnh này giúp HTML hiểu và render dấu xuống dòng từ Google Sheets */
+    line-height: 1.4;
+}
+
+/* Vùng chứa các nút bấm Link Review */
+.link-reviews-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    margin-top: 5px;
+}
+
+/* Style gốc của khung Chú giải */
+.info-legend {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 13px;
+    color: #333;
+    width: 280px;
+    max-height: 70vh;
+    overflow-y: auto;
+    line-height: 1.5;
+    transition: all 0.3s ease; /* Hiệu ứng mượt khi đóng/mở */
+}
+
+/* Tiêu đề của bảng chú giải (luôn hiện) */
+.legend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.legend-header h4 {
+    margin: 0;
+    color: #d35400;
+    font-size: 15px;
+}
+
+/* Phần nội dung bên dưới (sẽ bị ẩn khi thu gọn) */
+.legend-content {
+    display: block;
+    margin-top: 10px;
+}
+
+.info-legend hr {
+    border: 0;
+    border-top: 1px dashed #ccc;
+    margin: 10px 0;
+}
+
+/* --- KHI BẢNG CHÚ GIẢI BỊ THU GỌN --- */
+.info-legend.collapsed {
+    width: auto;
+    padding: 10px 15px;
+    overflow: hidden;
+}
+
+.info-legend.collapsed .legend-content {
+    display: none; /* Ẩn nội dung */
+}
+
+.info-legend.collapsed .legend-header i {
+    transform: rotate(180deg); /* Xoay mũi tên */
+    transition: transform 0.3s;
+}
+
+.info-legend h4 {
+    margin: 0 0 10px 0;
+    color: #d35400;
+    font-size: 15px;
+    text-align: center;
+}
+
+.info-legend hr {
+    border: 0;
+    border-top: 1px solid #ccc;
+    margin: 10px 0;
+}
+
+.info-legend ul {
+    padding-left: 20px;
+    margin: 5px 0;
+}
+
+/* Style cho nút Đăng ký Tour */
+.btn-tour {
+    display: block;
+    background: #e74c3c;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 14px;
+    margin-top: 15px;
+    transition: 0.3s;
+    animation: pulse 2s infinite; /* Hiệu ứng nhấp nháy nhẹ thu hút sự chú ý */
+}
+
+.btn-tour:hover {
+    background: #c0392b;
+    color: white;
+}
+
+/* Hiệu ứng nhịp đập cho nút Đăng ký Tour */
+@keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+    70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
