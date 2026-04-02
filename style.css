@@ -41,7 +41,7 @@ body, html {
     margin-bottom: 10px;
 }
 
-.popup-buttons {
+/* .popup-buttons {
     display: flex;
     justify-content: space-around;
     margin-top: 15px;
@@ -54,7 +54,7 @@ body, html {
     color: white;
     font-size: 13px;
     transition: 0.3s;
-}
+} */
 
 .btn-yandex { background-color: #ff0000; }
 .btn-google { background-color: #4285F4; }
@@ -243,4 +243,136 @@ body, html {
     0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
     70% { transform: scale(1.03); box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+/* Tối ưu kích thước các nút bấm trong Popup */
+.popup-buttons {
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 4px; /* Khoảng cách giữa các nút */
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.popup-buttons a, .btn-review {
+    flex: 1 1 calc(50% - 4px); /* Chia đều 2 cột, trừ đi khoảng cách gap */
+    padding: 6px 8px; /* Giảm padding để nút mỏng hơn */
+    font-size: 11px; /* Thu nhỏ size chữ */
+    border-radius: 4px;
+    box-sizing: border-box;
+    text-align: center;
+    margin: 0 !important; /* Xóa margin cũ */
+    white-space: nowrap; /* Không cho rớt dòng chữ trong nút */
+}
+
+/* Nút viết review (Nút to ở dưới cùng) */
+.btn-write-review {
+    display: block;
+    background-color: #f39c12; 
+    color: white; 
+    width: 100%; 
+    text-align: center; 
+    padding: 8px; /* Dày hơn nút thường một chút */
+    border-radius: 4px; 
+    text-decoration: none; 
+    font-weight: bold; 
+    font-size: 12px;
+    margin-top: 6px;
+    box-sizing: border-box;
+}
+
+/* Tối ưu tên địa điểm đa ngôn ngữ */
+.sub-name-wrapper {
+    font-size: 11px;
+    color: #7f8c8d;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+/* Tối ưu chữ trên các nút bấm */
+.popup-buttons a, .btn-write-review {
+    color: #ffffff !important; /* Ép chữ màu trắng */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* Đổ bóng chữ để dễ đọc */
+    font-weight: 600;
+}
+
+/* Nút Lưu Bộ Sưu Tập */
+.btn-collection {
+    background-color: #9b59b6; 
+    color: white !important;
+    width: 100%; 
+    display: block; 
+    text-align: center; 
+    padding: 8px; 
+    border-radius: 4px; 
+    border: none;
+    font-weight: bold; 
+    font-size: 12px;
+    margin-top: 6px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.btn-collection.added {
+    background-color: #27ae60; /* Đổi sang màu xanh khi đã lưu */
+}
+
+/* Trạng thái tắt: Ẩn đi nhưng không làm vỡ cấu trúc Leaflet */
+.hide-all-labels .leaflet-tooltip.custom-label {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: opacity 0.2s;
+}
+
+/* Trạng thái bật: Hiển thị rõ ràng */
+.show-all-labels .leaflet-tooltip.custom-label {
+    opacity: 0.9 !important;
+    visibility: visible !important;
+}
+/* Tối ưu hóa vòng tròn và icon bên trong */
+.custom-div-icon div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    transition: all 0.2s ease;
+}
+
+.custom-div-icon i {
+    font-size: 14px; /* Điều chỉnh kích thước icon cho vừa vặn */
+    color: white;
+    line-height: 1;
+}
+
+/* Hiệu ứng khi di chuột qua marker */
+.custom-div-icon:hover div {
+    transform: scale(1.1);
+}
+
+/* --- TRÌNH KHÁM PHÁ BIỂU TƯỢNG (ICON PICKER) --- */
+.icon-picker-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6); z-index: 99999;
+    display: flex; justify-content: center; align-items: center;
+}
+
+.icon-picker-modal {
+    background: white; padding: 15px; border-radius: 8px;
+    width: 90%; max-width: 320px; display: flex; flex-direction: column;
+    max-height: 80vh; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.icon-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: 8px; overflow-y: auto; padding: 5px; margin-top: 10px;
+}
+
+.icon-item {
+    font-size: 18px; text-align: center; padding: 10px 0; cursor: pointer;
+    border-radius: 6px; border: 1px solid #e0e0e0; color: #555;
+    transition: all 0.2s;
+}
+
+.icon-item:hover, .icon-item.selected {
+    background: #9b59b6; color: white; border-color: #9b59b6;
+    transform: scale(1.1);
 }
