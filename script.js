@@ -1,58 +1,223 @@
+// =========================================================
+// ⚙️ TRUNG TÂM CẤU HÌNH HỆ THỐNG (CONFIG)
+// =========================================================
+const CONFIG = {
+    // 1. LINK DỮ LIỆU ĐÁM MÂY (Google Sheet -> CSV)
+    PUBLIC_SHEET_CSV: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRBd-vnyV-ulOXEflJ9IGWx2BINRoheQhhU6tvfd82W04V7xmk8-y8251mwsr0VyrMgefgCapMZ84DG/pub?gid=1052982976&single=true&output=csv",
+    SHARE_SHEET_CSV: "https://docs.google.com/spreadsheets/d/1I8uwsdajZMe7I1cM1DEXApEpR00GESB9Lt06i_9_qys/gviz/tq?tqx=out:csv&sheet=SHAREID",
+    // 2. FORM 1: GỬI ĐÓNG GÓP PUBLIC (Chờ duyệt)
+    FORM_PUBLIC: {
+        URL: "https://docs.google.com/forms/d/e/1FAIpQLScOzdIzkPgeZT757_BwXn_3Wm10Tq8vPtP9MAOpRQXjxc9A6Q/formResponse",
+        ENTRY_NAME: "entry.1753754339",   // Câu hỏi: Tên địa điểm
+        ENTRY_COORDS: "entry.1072939078", // Câu hỏi: Tọa độ (Lat, Lng)
+        ENTRY_CAT: "entry.127396233",    // Câu hỏi: Bộ sưu tập
+        ENTRY_DESC: "entry.506978883",   // Câu hỏi: Mô tả / Review
+        ENTRY_DATE: "entry.1832626317",   // Câu hỏi: Ngày diễn ra
+        ENTRY_COLOR: "entry.284725110",  // Câu hỏi: Màu sắc
+        ENTRY_ICON: "entry.1353456467"    // Câu hỏi: Biểu tượng
+    },
 
+    // 3. FORM 2: HỆ THỐNG LƯU TRỮ MÃ CHIA SẺ (Chạy ngầm)
+    FORM_SHARE: {
+        URL: "https://docs.google.com/forms/d/e/1FAIpQLSdhhnCyOj1QHKTRWrgykQTTNerYyAmUX3c6_fc_UCHfvzHx1g/formResponse",
+        ENTRY_SHARE_ID: "entry.1016520745", // Câu hỏi: Share ID (VD: TOUR-123)
+        ENTRY_JSON: "entry.763611253"      // Câu hỏi: Chuỗi JSON Data
+    },
 
-window.addEventListener('load', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const shareCode = urlParams.get('share');
+    // 4- DANH SÁCH BỘ SƯU TẬP PHỔ BIẾN
+    COMMON_CATEGORIES: [
+        "Yêu thích",
+        "Nhà hàng & Quán ăn",
+        "Quán Cafe & Trà sữa",
+        "Quán Bar & Pub",
+        "Ẩm thực đường phố",
+        "Công viên & Khu sinh thái",
+        "Bảo tàng & Triển lãm",
+        "Di tích lịch sử & Văn hóa",
+        "Điểm Check-in sống ảo",
+        "Đền, Chùa & Nhà thờ",
+        "Trung tâm thương mại",
+        "Chợ truyền thống / Chợ đêm",
+        "Cửa hàng tiện lợi / Siêu thị",
+        "Khách sạn & Nơi lưu trú",
+        "Thể thao & Hoạt động ngoài trời",
+        "Rạp chiếu phim & Nhà hát",
+        "Sự kiện & Lễ hội",
+        "Trạm tàu, xe & Sân bay"
+    ]
+};
+
+// =========================================================
+
+// Hàm tự động nhận dạng Link và xử lý xuống dòng
+window.formatDescription = function(text) {
+    if (!text) return '(Không có mô tả)';
     
-    if (shareCode) {
-        try {
-            const decodedStr = decodeURIComponent(atob(shareCode));
-            const decodedData = JSON.parse(decodedStr);
-            
-            if (Array.isArray(decodedData)) {
-                // Lấy dữ liệu hiện tại
-                let currentData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
+    // 1. Dùng Regex tìm các đoạn bắt đầu bằng http:// hoặc https:// và bọc thẻ <a> lại
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    let formattedText = text.replace(urlRegex, function(url) {
+        return `<a href="${url}" target="_blank" style="color: #3498db; text-decoration: underline;" onclick="event.stopPropagation();">${url}</a>`;
+    });
+
+    // 2. Chuyển đổi các dấu Enter (xuống dòng) thành thẻ <br> trong HTML
+    formattedText = formattedText.replace(/\n/g, '<br>');
+    
+    return formattedText;
+};
+
+// 1. Hàm hỗ trợ tải CSV (Dùng chung toàn hệ thống)
+window.fetchCSV = function(url) {
+    return new Promise((resolve) => {
+        Papa.parse(url, {
+            download: true, header: true,
+            complete: function(results) { resolve(results.data); },
+            error: function() { resolve([]); }
+        });
+    });
+};
+
+// 2. Hàm xử lý tải dữ liệu theo Share ID (Dùng chung cho cả URL và Nhập tay)
+window.processShareId = async function(shareId) {
+    if (!shareId) return;
+    shareId = shareId.trim().toUpperCase();
+
+    let shareRows = await fetchCSV(CONFIG.SHARE_SHEET_CSV);
+    
+    // Tìm dòng chứa ID (Dùng 'includes' để tránh lỗi khoảng trắng)
+    let matchedRow = shareRows.find(row => Object.values(row).some(val => typeof val === 'string' && val.includes(shareId)));
+    
+    if (matchedRow) {
+        let jsonStr = Object.values(matchedRow).find(val => typeof val === 'string' && val.startsWith('['));
+        
+        if (jsonStr) {
+            try {
+                let parsedCol = JSON.parse(jsonStr);
+                let currentLocalData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
                 let newCount = 0;
 
-                decodedData.forEach(item => {
-                    // CHUẨN HÓA: Ép mọi dữ liệu về cấu trúc chuẩn
-                    let restored = {
-                        id: item.id || `shared_${(item.la || item.lat).toFixed(6)}_${(item.ln || item.lng).toFixed(6)}`.replace(/\./g, '-'),
-                        name: item.n || item.name || "Địa điểm mới",
-                        desc: item.d || item.desc || "",
-                        lat: parseFloat(item.la || item.lat),
-                        lng: parseFloat(item.ln || item.lng),
-                        collectionName: item.c || item.collectionName || "Được chia sẻ",
-                        date: item.dt || item.date || "",
-                        color: item.color || "#e67e22",
-                        icon: item.icon || "fa-share-alt"
-                    };
-
-                    // Kiểm tra nếu tọa độ chưa tồn tại thì mới thêm
-                    if (!currentData.some(old => old.lat === restored.lat && old.lng === restored.lng)) {
-                        currentData.push(restored);
+                parsedCol.forEach(item => {
+                    item.id = `imported_${Math.random().toString(36).substr(2,9)}`;
+                    item.collectionName = `${item.collectionName} (Từ bạn bè)`;
+                    if (!currentLocalData.some(old => old.lat === item.lat && old.lng === item.lng && old.name === item.name)) {
+                        currentLocalData.push(item);
                         newCount++;
                     }
                 });
 
                 if (newCount > 0) {
-                    localStorage.setItem('moscowCollectionsData', JSON.stringify(currentData));
-                    // Cập nhật lại biến toàn cục trước khi reload hoặc vẽ
-                    window.myCollectionsData = currentData;
-                    alert(`🎉 Đã nhận thêm ${newCount} địa điểm!`);
+                    window.myCollectionsData = currentLocalData;
+                    localStorage.setItem('moscowCollectionsData', JSON.stringify(currentLocalData));
+                    if (typeof renderCustomSavedPoints === 'function') renderCustomSavedPoints();
+                    alert(`🎉 TING TING! Đã tải thành công ${newCount} địa điểm từ mã ${shareId}!`);
+                } else {
+                    alert("📍 Các địa điểm trong mã này đã có sẵn trên bản đồ của bạn rồi!");
                 }
-                // Xóa tham số share để tránh lặp lại
-                window.history.replaceState({}, document.title, window.location.pathname);
-                location.reload();
+            } catch(e) { console.error("Lỗi JSON", e); alert("❌ Lỗi dữ liệu bên trong mã này."); }
+        } else {
+            alert("❌ Mã hợp lệ nhưng không tìm thấy dữ liệu địa điểm.");
+        }
+    } else {
+        alert(`❌ Không tìm thấy mã "${shareId}" trên hệ thống. Hãy chắc chắn mã đã được lưu lên đám mây!`);
+    }
+};
+
+// 3. Hàm gọi hộp thoại Nhập tay (Gắn vào nút Nhập Mã)
+window.askForShareId = function() {
+    let userInput = prompt("Mời bạn nhập mã chia sẻ (Ví dụ: TOUR-ABC12):");
+    if (userInput && userInput.trim() !== "") {
+        processShareId(userInput);
+    }
+};
+
+// 4. Logic Load lần đầu khi mở web
+window.addEventListener('load', async function() {
+    let currentLocalData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
+
+    // =======================================================
+    currentLocalData = currentLocalData.filter(item => {
+        // BỌC AN TOÀN: Chỉ kiểm tra startsWith khi điểm đó thực sự tồn tại ID
+        if (item && item.id && typeof item.id === 'string') {
+            return !item.id.startsWith('public_');
+        }
+        return true; // Giữ lại những điểm cá nhân cũ không có ID để không bị mất dữ liệu
+    });
+
+    // ==========================================
+    // LUỒNG 1: TẢI ĐIỂM PUBLIC (CẦN ADMIN DUYỆT)
+    // ==========================================
+    // Thêm chuỗi thời gian để ÉP trình duyệt không dùng Cache cũ
+    let noCacheUrl = CONFIG.PUBLIC_SHEET_CSV + "&t=" + new Date().getTime();
+    
+    let publicRows = await fetchCSV(noCacheUrl);
+    
+    publicRows.forEach(row => {
+        if (row.Status === "Public") {
+            let isVerified = (row.Verified === "TRUE" || row.Verified === "1");
+            let badge = isVerified ? `<i class="fas fa-check-circle" style="color:#3498db; margin-left:5px;" title="Đã xác minh"></i>` : '';
+            
+            let lat = 0, lng = 0;
+            if (row.Coords) {
+                let parts = row.Coords.split(',');
+                if (parts.length >= 2) {
+                    lat = parseFloat(parts[0].trim());
+                    lng = parseFloat(parts[1].trim());
+                }
             }
-        } catch(e) { console.error("Lỗi Import:", e); }
+
+            if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+            // let pData = {
+            //     id: `public_${lat}_${lng}`, 
+            //     name: `${row.Name} ${badge}`, 
+            //     desc: row.Desc,
+            //     lat: lat, lng: lng, 
+            //     collectionName: row.CollectionName || "🌍 Bản đồ Chung",
+            //     color: row.Color || "#27ae60", icon: row.Icon || "fa-globe", date: row.Date || ""
+            // };
+
+            // SỬA DÒNG NÀY: Tự động gắn 🌍 vào trước tên bộ sưu tập Public
+            let pData = {
+                id: `public_${lat}_${lng}`, 
+                name: `${row.Name} ${badge}`, 
+                desc: row.Desc,
+                lat: lat, lng: lng, 
+                // Tự động gắn mác Public
+                collectionName: row.CollectionName ? `🌍 ${row.CollectionName}` : "🌍 Bản đồ Chung",
+                color: row.Color || "#27ae60", icon: row.Icon || "fa-globe", date: row.Date || ""
+            };
+            
+            // Push dữ liệu mới nhất vào
+            currentLocalData.push(pData);
+        }
+    });
+
+    // Lưu lại LocalStorage (Lúc này Private được giữ nguyên, Public đã được Refresh)
+    window.myCollectionsData = currentLocalData;
+    localStorage.setItem('moscowCollectionsData', JSON.stringify(currentLocalData));
+    
+    if (typeof renderCustomSavedPoints === 'function') renderCustomSavedPoints();
+
+    // KIỂM TRA NẾU CÓ URL CHỨA ID THÌ TỰ ĐỘNG TẢI
+    const urlParams = new URLSearchParams(window.location.search);
+    const incomingShareId = urlParams.get('id');
+    if (incomingShareId) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await processShareId(incomingShareId);
     }
 });
+// 1. KHỞI TẠO BẢN ĐỒ VỚI VỊ TRÍ MẶC ĐỊNH CỦA USER
 // ==========================================
-// PHẦN 1: KHỞI TẠO BẢN ĐỒ VÀ BẢN ĐỒ NỀN
-// ==========================================
-const map = L.map('map').setView([55.7558, 37.6173], 11);
+// Đọc vị trí người dùng đã lưu (nếu có)
+let savedLocation = JSON.parse(localStorage.getItem('userDefaultLocation'));
 
+// Nếu chưa có, dùng Moscow làm mặc định
+let defaultLat = savedLocation ? savedLocation.lat : 55.751244;
+let defaultLng = savedLocation ? savedLocation.lng : 37.618423;
+let defaultZoom = savedLocation ? savedLocation.zoom : 13;
+
+let map = L.map('map').setView([defaultLat, defaultLng], defaultZoom);
+
+// ... (Giữ nguyên phần khởi tạo baseMaps và mainLayerControl bên dưới) ...
 const mapLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 18, attribution: '&copy; CARTO' });
 const mapDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18, attribution: '&copy; CARTO' });
 const mapSatellite = L.tileLayer('http://mt0.google.com/vt/lyrs=y&hl=vi&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: '&copy; Google Maps' });
@@ -87,7 +252,9 @@ function getCustomIcon(category) {
         iconAnchor: [15, 15]
     });
 }
-
+if (window.mainLayerControl) {
+    window.mainLayerControl.remove(); 
+}
 // ==========================================
 // PHẦN 2: ĐỌC DỮ LIỆU TỪ GOOGLE SHEETS
 // ==========================================
@@ -247,12 +414,6 @@ Papa.parse(sheetCSV_URL, {
         // window.mainLayerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: true }).addTo(map);
         window.mainLayerControl = L.control.layers(baseMaps, {}, { collapsed: true }).addTo(map);
         window.customLayerGroups = {}; // Lưu trữ các nhóm layer cá nhân
-        // Bảng điều khiển Layer (Đã thu gọn collapsed: true)
-        // L.control.layers(baseMaps, overlayMaps, { collapsed: true }).addTo(map);
-        // Đăng ký các Layer của Google Sheets vào Bảng điều khiển chung
-        // for (let cat in layerGroups) {
-        //     window.mainLayerControl.addOverlay(layerGroups[cat], cat);
-        // }
         for (let cat in categoryLayers) {
             window.mainLayerControl.addOverlay(categoryLayers[cat], cat);
         }
@@ -305,23 +466,6 @@ locateControl.onAdd = function() {
 };
 locateControl.addTo(map);
 
-// let locateControl = L.control({position: 'topleft'});
-// locateControl.onAdd = function() {
-//     let div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
-//     div.style.backgroundColor = 'white';
-//     div.style.width = '34px';
-//     div.style.height = '34px';
-//     div.style.cursor = 'pointer';
-//     div.innerHTML = `<a href="#" title="Vị trí của tôi" style="font-size:18px; color: #333; line-height:34px; text-align:center; display:block; text-decoration:none;"><i class="fas fa-crosshairs"></i></a>`;
-    
-//     div.onclick = function(e){
-//         e.preventDefault();
-//         map.locate({setView: true, maxZoom: 16}); // Lệnh tìm vị trí và zoom đến
-//     }
-//     return div;
-// };
-// locateControl.addTo(map);
-
 // Lắng nghe sự kiện nếu tìm thấy vị trí thì vẽ một chấm xanh
 map.on('locationfound', function(e) {
     L.circleMarker(e.latlng, { radius: 8, color: 'white', fillColor: '#4285F4', fillOpacity: 1 }).addTo(map).bindPopup("Bạn đang ở đây!").openPopup();
@@ -329,15 +473,6 @@ map.on('locationfound', function(e) {
 map.on('locationerror', function(e) {
     alert("Không thể xác định vị trí của bạn. Vui lòng cấp quyền vị trí cho trình duyệt.");
 });
-
-        // let overlayMaps = {};
-        // for (let cat in categoryLayers) {
-        //     map.addLayer(categoryLayers[cat]);
-        //     overlayMaps[cat] = categoryLayers[cat];
-        // }
-        // L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
-//     }
-// });
 
 // ==========================================
 // PHẦN 3: SỰ KIỆN CLICK THÊM ĐỊA ĐIỂM MỚI 
@@ -398,99 +533,49 @@ let yLink = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
 let myCollectionsData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
 let customLayerGroups = {}; // Object lưu trữ các layer bộ sưu tập cá nhân
 
-// 1. HÀM TẠO FORM LƯU ĐỊA ĐIỂM (TÍCH HỢP CHỌN BỘ SƯU TẬP)
-
-// window.showCustomSaveForm = function(lat, lng, defaultName = "", defaultId = null) {
-
-// // Dùng link Search API chuẩn của Google để ghim đúng vị trí
-// let gLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-// // Yandex Maps (Nhớ là Kinh độ Lng đứng trước Vĩ độ Lat)
-// let yLink = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
-
-//     let coordsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-//     let markerId = defaultId || `custom_${lat.toFixed(6)}_${lng.toFixed(6)}`.replace(/\./g, '-');
-//     // Tìm xem điểm này đã có trong bộ sưu tập chưa để lấy màu/icon cũ (nếu có)
-//     let existing = myCollectionsData.find(item => item.id === markerId) || {};
-//     let currentColor = existing.color || '#8e44ad';
-//     let currentIcon = existing.icon || 'fa-heart';
-//     // Lấy danh sách các Bộ sưu tập đã có để gợi ý
-//     // let existingColNames = [...new Set(myCollectionsData.map(item => item.collectionName || 'Yêu thích'))];
-//     // Ép chữ 'Yêu thích' luôn luôn xuất hiện đầu tiên trong danh sách gợi ý
-//     let existingColNames = [...new Set(['Yêu thích', ...myCollectionsData.map(item => item.collectionName || 'Yêu thích')])];
-//     let datalistOptions = existingColNames.map(name => `<option value="${name}">`).join('');
-
-//     // Link Form đóng góp
-//     let formBaseUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSeDXHWF-A8H1htIUwH3g13sKN5kxrnTaU4Nm8vT4p6e4ufL-w/viewform';
-//     let nameEntryId = 'entry.1274491323';   
-//     let coordsEntryId = 'entry.218236711'; 
-//     let publicShareUrl = `${formBaseUrl}?usp=pp_url&${nameEntryId}=${encodeURIComponent(defaultName || 'Địa điểm mới')}&${coordsEntryId}=${encodeURIComponent(coordsStr)}`;
-
-//     let popupContent = `
-//         <div class="popup-custom" style="text-align: left; padding: 5px; min-width: 240px;">
-//             <h4 style="margin: 0 0 10px 0; color: #9b59b6;"><i class="fas fa-bookmark"></i> Lưu vào Bộ sưu tập</h4>
-            
-//             <input type="text" id="cName_${markerId}" value="${defaultName}" placeholder="Tên địa điểm (bắt buộc)" style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
-            
-//             <input type="text" id="cCat_${markerId}" list="colList_${markerId}" placeholder="Tên Bộ sưu tập (VD: Ngày 1, Quán ăn...)" value="Yêu thích" style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; color: #8e44ad;">
-//             <datalist id="colList_${markerId}">${datalistOptions}</datalist>
-//             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-//                 <div style="flex: 1;">
-//                     <label style="font-size: 11px; display:block; margin-bottom:3px;">Màu sắc:</label>
-//                     <input type="color" id="cColor_${markerId}" value="${currentColor}" style="width:100%; height:30px; border:none; padding:0; cursor:pointer;">
-//                 </div>
-//                 <div style="flex: 1;">
-//                     <label style="font-size: 11px; display:block; margin-bottom:3px;">Biểu tượng:</label>
-//                     <select id="cIcon_${markerId}" style="width:100%; padding:5px; border-radius:4px;">
-//                         <option value="fa-heart" ${currentIcon === 'fa-heart' ? 'selected' : ''}>❤️ Tim</option>
-//                         <option value="fa-star" ${currentIcon === 'fa-star' ? 'selected' : ''}>⭐ Sao</option>
-//                         <option value="fa-camera" ${currentIcon === 'fa-camera' ? 'selected' : ''}>📷 Ảnh</option>
-//                         <option value="fa-utensils" ${currentIcon === 'fa-utensils' ? 'selected' : ''}>🍴 Ăn uống</option>
-//                         <option value="fa-flag" ${currentIcon === 'fa-flag' ? 'selected' : ''}>🚩 Cờ</option>
-//                         <option value="fa-landmark" ${currentIcon === 'fa-landmark' ? 'selected' : ''}>🏛️ Di tích</option>
-//                     </select>
-//                 </div>
-//             </div>
-
-//             <textarea id="cDesc_${markerId}" placeholder="Ghi chú cá nhân..." style="width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; resize: vertical; min-height: 50px;"></textarea>
-            
-//             <div style="display:flex; gap:5px; margin-bottom: 10px;">
-//                 <button onclick="savePointData('${markerId}', ${lat}, ${lng}, false, '')" style="flex:1; background: #9b59b6; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">
-//                     <i class="fas fa-save"></i> Chỉ lưu cá nhân
-//                 </button>
-//             </div>
-
-//             <div style="text-align: center; border-top: 1px dashed #ccc; padding-top: 10px;">
-//                 <p style="font-size: 10px; color: #555; margin: 0 0 5px 0;">Vừa lưu vừa Đóng góp lên Bản đồ chung:</p>
-//                 <button onclick="savePointData('${markerId}', ${lat}, ${lng}, true, '${publicShareUrl}')" style="width: 100%; background: #27ae60; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
-//                     <i class="fas fa-globe-asia"></i> Lưu & Chia sẻ Public
-//                 </button>
-//             </div>
-//         </div>
-//     `;
-//     L.popup().setLatLng([lat, lng]).setContent(popupContent).openOn(map);
-// };
-
 window.showCustomSaveForm = function(lat, lng, defaultName = "", defaultId = null) {
+    // 1. Khởi tạo ID và thông tin mặc định
     let markerId = defaultId || `custom_${lat.toFixed(6)}_${lng.toFixed(6)}`.replace(/\./g, '-');
     let existing = myCollectionsData.find(item => item.id === markerId) || {};
+    
     let currentColor = existing.color || '#8e44ad';
     let currentIcon = existing.icon || 'fa-heart';
+    let currentCat = existing.collectionName || 'Yêu thích';
 
     let gLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     let yLink = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
 
-    // --- TẠO LINK GOOGLE FORM TỰ ĐỘNG ĐIỀN ĐỂ ĐÓNG GÓP ---
-    let coordsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    let formBaseUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSeDXHWF-A8H1htIUwH3g13sKN5kxrnTaU4Nm8vT4p6e4ufL-w/viewform'; // THAY ID FORM
-    let nameEntryId = 'entry.1274491323';   // THAY ID CÂU HỎI TÊN
-    let coordsEntryId = 'entry.218236711'; // THAY ID CÂU HỎI TỌA ĐỘ
-    let publicShareUrl = `${formBaseUrl}?usp=pp_url&${nameEntryId}=${encodeURIComponent(defaultName || existing.name || 'Địa điểm mới')}&${coordsEntryId}=${encodeURIComponent(coordsStr)}`;
+    // 2. Xử lý logic Dropdown (Danh sách bộ sưu tập)
+    let categoryOptions = '';
+    let isCommonCat = false;
+    
+    // Đọc danh sách từ CONFIG
+    if (typeof CONFIG !== 'undefined' && CONFIG.COMMON_CATEGORIES) {
+        categoryOptions = CONFIG.COMMON_CATEGORIES.map(cat => {
+            let selected = (cat === currentCat) ? 'selected' : '';
+            if (cat === currentCat) isCommonCat = true;
+            return `<option value="${cat}" ${selected}>${cat}</option>`;
+        }).join('');
+    }
+    
+    // Nếu bộ sưu tập cũ không nằm trong danh sách chung, tự động chọn "OTHER"
+    let selectOther = !isCommonCat ? 'selected' : '';
+    let otherInputDisplay = isCommonCat ? 'none' : 'block';
 
+    // 3. Xây dựng giao diện HTML
     let popupContent = `
         <div class="popup-custom" style="min-width: 250px;">
             <h4 style="margin: 0 0 10px 0; color: #9b59b6;"><i class="fas fa-paint-brush"></i> Tùy chỉnh địa điểm</h4>
+            
+            <label style="font-size: 11px; color:#555; display:block; margin-bottom:3px;">Tên địa điểm / Sự kiện:</label>
             <input type="text" id="cName_${markerId}" value="${defaultName || existing.name || ''}" placeholder="Tên địa điểm..." style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;">
-            <input type="text" id="cCat_${markerId}" list="colList_${markerId}" value="${existing.collectionName || 'Yêu thích'}" style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;">
+            
+            <label style="font-size: 11px; color:#555; display:block; margin-bottom:3px;">Bộ sưu tập:</label>
+            <select id="cCatSelect_${markerId}" onchange="toggleOtherCategory('${markerId}')" style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;">
+                ${categoryOptions}
+                <option value="OTHER" ${selectOther}>-- Nhập mục khác... --</option>
+            </select>
+            <input type="text" id="cCatOther_${markerId}" value="${!isCommonCat ? currentCat : ''}" placeholder="Tên bộ sưu tập mới..." style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box; display:${otherInputDisplay};">
 
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
                 <div style="flex: 1;">
@@ -507,100 +592,140 @@ window.showCustomSaveForm = function(lat, lng, defaultName = "", defaultId = nul
                     <input type="hidden" id="cIcon_${markerId}" value="${currentIcon}">
                 </div>
             </div>
-           
-            <label style="font-size: 11px; display:block; margin-bottom:3px;">Ngày diễn ra sự kiện:</label>
-            <input type="date" id="cDate_${markerId}" value="${existing.date || ''}" style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc;">
+         
+            <label style="font-size: 11px; display:block; margin-bottom:3px; color:#555;">Ngày diễn ra (nếu có):</label>
+            <input type="date" id="cDate_${markerId}" value="${existing.date || ''}" style="width:100%; padding:8px; margin-bottom:8px; border-radius:4px; border:1px solid #ccc; box-sizing:border-box;">
 
+            <label style="font-size: 11px; display:block; margin-bottom:3px; color:#555;">Mô tả / Đánh giá:</label>
             <textarea id="cDesc_${markerId}" placeholder="Ghi chú cá nhân..." style="width:100%; padding:8px; margin-bottom:10px; border-radius:4px; border:1px solid #ccc; height:50px; box-sizing:border-box;">${existing.desc || ''}</textarea>
             
             <div class="popup-buttons" style="margin-bottom:10px; padding-top:0; border:none; display:flex; gap:5px;">
-                <a href="${yLink}" target="_blank" class="btn-yandex" style="background:#ff0000; flex:1; padding:8px; color:white; text-align:center; text-decoration:none; border-radius:4px;"><i class="fab fa-yandex"></i> Yandex</a>
-                <a href="${gLink}" target="_blank" class="btn-google" style="background:#4285F4; flex:1; padding:8px; color:white; text-align:center; text-decoration:none; border-radius:4px;"><i class="fab fa-google"></i> Google</a>
+                <a href="${yLink}" target="_blank" style="background:#ff0000; flex:1; padding:8px; color:white; text-align:center; text-decoration:none; border-radius:4px;"><i class="fab fa-yandex"></i> Yandex</a>
+                <a href="${gLink}" target="_blank" style="background:#4285F4; flex:1; padding:8px; color:white; text-align:center; text-decoration:none; border-radius:4px;"><i class="fab fa-google"></i> Google</a>
             </div>
 
-            <button onclick="savePointData('${markerId}', ${lat}, ${lng}, false, '')" class="btn-write-review" style="background:#9b59b6; width:100%; border:none; padding:10px; border-radius:4px; color:white; font-weight:bold; cursor:pointer; margin-bottom: 5px;">
-                <i class="fas fa-save"></i> Chỉ lưu cá nhân
+            <button onclick="savePointDataWithLogic('${markerId}', ${lat}, ${lng}, false)" style="width:100%; background:#9b59b6; border:none; padding:10px; border-radius:4px; color:white; font-weight:bold; cursor:pointer; margin-bottom: 5px;">
+                <i class="fas fa-lock"></i> Chỉ lưu vào máy của tôi
             </button>
 
-            <div style="text-align: center; border-top: 1px dashed #ccc; padding-top: 10px; margin-top: 5px;">
-                <p style="font-size: 10px; color: #555; margin: 0 0 5px 0;">Vừa lưu vừa Đóng góp lên Bản đồ chung:</p>
-                <button onclick="savePointData('${markerId}', ${lat}, ${lng}, true, '${publicShareUrl}')" style="width: 100%; background: #27ae60; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">
-                    <i class="fas fa-globe-asia"></i> Lưu & Chia sẻ Public
-                </button>
-            </div>
+            <button onclick="savePointDataWithLogic('${markerId}', ${lat}, ${lng}, true)" style="width: 100%; background: #27ae60; color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; border: 2px solid #2ecc71;">
+                <i class="fas fa-globe-asia"></i> Lưu máy & Đóng góp Public
+            </button>
         </div>
     `;
     L.popup().setLatLng([lat, lng]).setContent(popupContent).openOn(map);
 };
+window.toggleOtherCategory = function(id) {
+    let select = document.getElementById(`cCatSelect_${id}`);
+    let otherInput = document.getElementById(`cCatOther_${id}`);
+    otherInput.style.display = (select.value === "OTHER") ? "block" : "none";
+};
+window.savePointDataWithLogic = function(markerId, lat, lng, isPublicShare = false) {
+    // Đọc tên
+    let nameVal = document.getElementById(`cName_${markerId}`).value.trim();
+    if (!nameVal) return alert("Vui lòng nhập tên địa điểm hoặc sự kiện!");
 
-// Thêm 2 tham số: isPublicShare và publicUrl
-window.savePointData = function(markerId, lat, lng, isPublicShare = false, publicUrl = '') {
+    // Xử lý đọc Bộ sưu tập (Category)
+    let selectVal = document.getElementById(`cCatSelect_${markerId}`).value;
+    let otherVal = document.getElementById(`cCatOther_${markerId}`).value.trim();
+    let finalCategory = (selectVal === "OTHER") ? otherVal : selectVal;
+    
+    if (selectVal === "OTHER" && !finalCategory) {
+        return alert("Vui lòng nhập tên bộ sưu tập mới!");
+    }
+    if (!finalCategory) finalCategory = 'Yêu thích'; // Giá trị dự phòng
+
+    // Đọc các trường còn lại
+    let colorVal = document.getElementById(`cColor_${markerId}`).value;
+    let iconVal = document.getElementById(`cIcon_${markerId}`).value;
+    let descVal = document.getElementById(`cDesc_${markerId}`).value.trim();
+    let dateVal = document.getElementById(`cDate_${markerId}`) ? document.getElementById(`cDate_${markerId}`).value : '';
+    
+    // TẠO ID MỚI ĐỂ LƯU KHÔNG GIỚI HẠN SỰ KIỆN TẠI 1 ĐỊA ĐIỂM
+    let uniqueEventId = `ev_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
+    let newData = { 
+        id: uniqueEventId, name: nameVal, desc: descVal, lat: lat, lng: lng, 
+        collectionName: finalCategory, color: colorVal, icon: iconVal, date: dateVal 
+    };
+    
+    // Lưu vào máy (LocalStorage)
+    myCollectionsData.push(newData);
+    localStorage.setItem('moscowCollectionsData', JSON.stringify(myCollectionsData));
+    
+    // Gửi ngầm lên Google Form nếu chọn Đóng góp Public
+    if (isPublicShare && typeof CONFIG !== 'undefined') {
+        let formData = new URLSearchParams();
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_NAME, nameVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat}, ${lng}`);
+        // formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, finalCategory);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_DESC, descVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_DATE, dateVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COLOR, colorVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_ICON, iconVal);
+        // XỬ LÝ LÔ-GIC "MỤC KHÁC" CỦA GOOGLE FORM
+        // ==========================================
+        if (selectVal === "OTHER") {
+            // Bắn tín hiệu 1: Chọn nút "Khác"
+            formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, "__other_option__");
+            // Bắn tín hiệu 2: Gửi nội dung ô text
+            formData.append(`${CONFIG.FORM_PUBLIC.ENTRY_CAT}.other_option_response`, otherVal);
+        } else {
+            // Nếu chọn mục có sẵn thì gửi bình thường
+            formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, selectVal);
+        }
+
+        fetch(CONFIG.FORM_PUBLIC.URL, { method: "POST", mode: "no-cors", body: formData })
+            .then(() => alert("Cảm ơn! Đã lưu cá nhân VÀ gửi đóng góp lên Bản đồ chung."))
+            .catch(e => console.error("Lỗi gửi Public:", e));
+    }
+
+    // Vẽ lại bản đồ và đóng popup
+    renderCustomSavedPoints();
+    map.closePopup();
+};
+
+
+window.savePointData = function(markerId, lat, lng, isPublicShare = false) {
     let nameVal = document.getElementById(`cName_${markerId}`).value.trim();
     let catVal = document.getElementById(`cCat_${markerId}`).value.trim() || 'Yêu thích';
     let colorVal = document.getElementById(`cColor_${markerId}`).value;
     let iconVal = document.getElementById(`cIcon_${markerId}`).value;
     let descVal = document.getElementById(`cDesc_${markerId}`).value.trim();
     let dateVal = document.getElementById(`cDate_${markerId}`) ? document.getElementById(`cDate_${markerId}`).value : '';
-
+    
     if (!nameVal) return alert("Vui lòng nhập tên địa điểm!");
 
-    let existingIndex = myCollectionsData.findIndex(item => item.id === markerId);
-
+    // LUÔN TẠO ID MỚI ĐỂ KHÔNG GIỚI HẠN SỐ SỰ KIỆN TẠI 1 CHỖ
+    let uniqueEventId = `ev_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
     let newData = { 
-    id: markerId, name: nameVal, desc: descVal, lat: lat, lng: lng, 
-    collectionName: catVal, color: colorVal, icon: iconVal,
-    date: dateVal // Đã thêm ngày tháng
+        id: uniqueEventId, name: nameVal, desc: descVal, lat: lat, lng: lng, 
+        collectionName: catVal, color: colorVal, icon: iconVal, date: dateVal 
     };
-
-    if (existingIndex > -1) {
-        myCollectionsData[existingIndex] = newData;
-    } else {
-        myCollectionsData.push(newData);
-    }
-
+    
+    myCollectionsData.push(newData);
     localStorage.setItem('moscowCollectionsData', JSON.stringify(myCollectionsData));
-    renderCustomSavedPoints();
-    updateCollectionCount();
-    map.closePopup();
+    
+    // Bắn ngầm lên Google Form (Sử dụng CONFIG)
+    if (isPublicShare) {
+        let formData = new URLSearchParams();
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_NAME, nameVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat}, ${lng}`);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, catVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_DESC, descVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_DATE, dateVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COLOR, colorVal);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_ICON, iconVal);
 
-    // KIỂM TRA: Nếu người dùng bấm nút xanh, mở tab mới đẩy dữ liệu sang Form
-    if (isPublicShare && publicUrl) {
-        window.open(publicUrl, '_blank');
+        fetch(CONFIG.FORM_PUBLIC.URL, { method: "POST", mode: "no-cors", body: formData });
     }
+
+    renderCustomSavedPoints();
+    map.closePopup();
 };
-// window.savePointData = function(markerId, lat, lng) {
-//     let nameVal = document.getElementById(`cName_${markerId}`).value.trim();
-//     let catVal = document.getElementById(`cCat_${markerId}`).value.trim() || 'Yêu thích';
-//     let colorVal = document.getElementById(`cColor_${markerId}`).value;
-//     let iconVal = document.getElementById(`cIcon_${markerId}`).value;
-//     let descVal = document.getElementById(`cDesc_${markerId}`).value.trim();
-    
-//     if (!nameVal) return alert("Vui lòng nhập tên địa điểm!");
 
-//     let existingIndex = myCollectionsData.findIndex(item => item.id === markerId);
-//     let newData = { 
-//         id: markerId, 
-//         name: nameVal, 
-//         desc: descVal, 
-//         lat: lat, 
-//         lng: lng, 
-//         collectionName: catVal,
-//         color: colorVal, // Lưu màu mới
-//         icon: iconVal    // Lưu icon mới
-//     };
-    
-//     if (existingIndex > -1) {
-//         myCollectionsData[existingIndex] = newData;
-//     } else {
-//         myCollectionsData.push(newData);
-//     }
 
-//     localStorage.setItem('moscowCollectionsData', JSON.stringify(myCollectionsData));
-//     renderCustomSavedPoints();
-//     updateCollectionCount();
-//     map.closePopup();
-// };
-// 3. HÀM XÓA ĐỊA ĐIỂM
 window.removeCustomPoint = function(markerId) {
     if (confirm("Bạn có chắc muốn xóa điểm này khỏi bộ sưu tập?")) {
         myCollectionsData = myCollectionsData.filter(item => item.id !== markerId);
@@ -610,196 +735,158 @@ window.removeCustomPoint = function(markerId) {
     }
 };
 
-// 4. HÀM VẼ LẠI CÁC BỘ SƯU TẬP (BIẾN THÀNH CÁC LAYER ĐỘC LẬP)
-
-
-// window.renderCustomSavedPoints = function() {
-//     // 1. XÓA CÁC LAYER CÁ NHÂN CŨ KHỎI BẢN ĐỒ
-//     // Chúng ta không xóa cả bảng điều khiển, chỉ xóa các lớp (overlays) bên trong nó
-//     for (let cat in customLayerGroups) {
-//         map.removeLayer(customLayerGroups[cat]);
-//         if (window.mainLayerControl) {
-//             window.mainLayerControl.removeLayer(customLayerGroups[cat]);
-//         }
-//     }
-//     customLayerGroups = {};
-
-//     // 2. DUYỆT DỮ LIỆU ĐỂ VẼ
-//     myCollectionsData.forEach(item => {
-//         // KIỂM TRA TỌA ĐỘ HỢP LỆ (Tránh lỗi undefined, undefined)
-//         if (!item.lat || !item.lng || isNaN(item.lat) || isNaN(item.lng)) {
-//             console.warn("Bỏ qua điểm lỗi tọa độ:", item);
-//             return;
-//         }
-
-//         // Kiểm tra bộ lọc ngày
-//         if (window.currentFilterDates && window.currentFilterDates.length > 0) {
-//             if (!item.date || !window.currentFilterDates.includes(item.date)) return;
-//         }
-
-//         let cName = item.collectionName || 'Yêu thích';
-
-//         // Tạo nhóm layer nếu chưa có
-//         if (!customLayerGroups[cName]) {
-//             customLayerGroups[cName] = L.markerClusterGroup({ maxClusterRadius: 30 });
-//             map.addLayer(customLayerGroups[cName]);
-            
-//             // THÊM VÀO BẢNG ĐIỀU KHIỂN (Chỉ thêm nếu bảng đã tồn tại)
-//             if (window.mainLayerControl) {
-//                 window.mainLayerControl.addOverlay(customLayerGroups[cName], `💖 ${cName}`);
-//             }
-//         }
-
-//         let pColor = item.color || '#8e44ad';
-//         let pIcon = item.icon || 'fa-heart';
-        
-//         let customIcon = L.divIcon({
-//             className: 'custom-div-icon',
-//             html: `<div style="background-color:${pColor}; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; border:2px solid white; box-shadow:0 2px 5px rgba(0,0,0,0.3);"><i class="fas ${pIcon}"></i></div>`,
-//             iconSize: [28, 28]
-//         });
-
-//         // SỬA LỖI CÚ PHÁP LINK (Dùng dấu $ trước ngoặc nhọn)
-//         let gLink = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
-//         let yLink = `https://yandex.ru/maps/?pt=${item.lng},${item.lat}&z=16&l=map`;
-
-//         let popupContent = `
-//             <div class="popup-custom">
-//                 <h3 style="margin:0 0 5px 0;">${item.name}</h3>
-//                 <p style="font-size:12px; color:#666;">${item.desc || 'Không có mô tả'}</p>
-//                 <div style="display:flex; gap:5px; margin-top:10px;">
-//                     <a href="${gLink}" target="_blank" style="flex:1; background:#4285F4; color:white; text-align:center; padding:5px; border-radius:4px; text-decoration:none; font-size:12px;">Google Maps</a>
-//                     <a href="${yLink}" target="_blank" style="flex:1; background:#ff0000; color:white; text-align:center; padding:5px; border-radius:4px; text-decoration:none; font-size:12px;">Yandex</a>
-//                 </div>
-//                 <button onclick="removeCustomPoint('${item.id}')" style="width:100%; margin-top:8px; background:#f8f9fa; border:1px solid #ddd; padding:5px; border-radius:4px; cursor:pointer; font-size:11px;">🗑️ Xóa khỏi bộ sưu tập</button>
-//             </div>
-//         `;
-
-//         L.marker([item.lat, item.lng], {icon: customIcon})
-//          .bindTooltip(item.name, {permanent: true, direction: 'bottom', className: 'custom-label'})
-//          .bindPopup(popupContent)
-//          .addTo(customLayerGroups[cName]);
-//     });
-
-//     if (typeof updateEventSummary === 'function') updateEventSummary();
-// };
-
-// window.renderCustomSavedPoints = function() {
-//     // 1. Lấy dữ liệu mới nhất từ biến toàn cục
-//     if (!window.myCollectionsData) {
-//         window.myCollectionsData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
-//     }
-
-//     // 2. Duyệt qua từng địa điểm trong bộ sưu tập
-//     myCollectionsData.forEach(item => {
-//         // Kiểm tra tọa độ hợp lệ
-//         if (!item.lat || !item.lng) return;
-
-//         // Lọc theo ngày (Multi-select)
-//         if (window.currentFilterDates && window.currentFilterDates.length > 0) {
-//             if (!item.date || !window.currentFilterDates.includes(item.date)) return;
-//         }
-
-//         let cName = item.collectionName || 'Yêu thích';
-
-//         // 3. LOGIC QUAN TRỌNG: Tạo và Đăng ký Layer Group
-//         if (!customLayerGroups[cName]) {
-//             // Tạo nhóm mới trên bản đồ
-//             customLayerGroups[cName] = L.markerClusterGroup({ maxClusterRadius: 30 });
-//             map.addLayer(customLayerGroups[cName]);
-            
-//             // Đăng ký vào bảng điều khiển Layer (Overlay)
-//             if (window.mainLayerControl) {
-//                 window.mainLayerControl.addOverlay(customLayerGroups[cName], `💖 ${cName}`);
-//             }
-//         }
-
-//         // Vẽ Marker (Giữ nguyên logic icon/popup của bạn)
-//         let pColor = item.color || '#8e44ad';
-//         let pIcon = item.icon || 'fa-heart';
-//         let customIcon = L.divIcon({
-//             className: 'custom-div-icon',
-//             html: `<div style="background-color:${pColor}; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; border:2px solid white;"><i class="fas ${pIcon}" style="font-size:12px;"></i></div>`,
-//             iconSize: [28, 28]
-//         });
-
-//         L.marker([item.lat, item.lng], {icon: customIcon})
-//          .bindTooltip(item.name, {permanent: true, direction: 'bottom', className: 'custom-label'})
-//          .bindPopup(`<b>${item.name}</b><br>${item.desc || ''}`)
-//          .addTo(customLayerGroups[cName]);
-//     });
-
-//     // Cập nhật thống kê ngày (nếu có)
-//     if (typeof updateEventSummary === 'function') updateEventSummary();
-// };
 window.renderCustomSavedPoints = function() {
-    // Lấy dữ liệu
-    if (!window.myCollectionsData) {
-        window.myCollectionsData = JSON.parse(localStorage.getItem('moscowCollectionsData')) || [];
-    }
-
-    // 1. CHỈ XÓA LAYER CÁ NHÂN CŨ (Tuyệt đối không dùng mainLayerControl.remove() nữa)
+    // 1. Dọn dẹp layer và bảng điều khiển cũ
     for (let cat in customLayerGroups) {
-        map.removeLayer(customLayerGroups[cat]); // Xóa khỏi bản đồ
-        if (window.mainLayerControl) {
-            window.mainLayerControl.removeLayer(customLayerGroups[cat]); // Rút tên khỏi Bảng điều khiển
-        }
+        map.removeLayer(customLayerGroups[cat]);
+        if (window.mainLayerControl) window.mainLayerControl.removeLayer(customLayerGroups[cat]);
     }
-    customLayerGroups = {}; // Làm rỗng danh sách tạm
+    customLayerGroups = {};
 
-    // 2. VẼ VÀ ĐĂNG KÝ LẠI TỪ ĐẦU
+    // 2. GOM NHÓM DỮ LIỆU THEO TỌA ĐỘ
+    let groupedLocations = {};
     myCollectionsData.forEach(item => {
-        if (!item.lat || !item.lng) return;
+        // === BỘ LỌC RÁC: CHỐT CHẶN BẢO VỆ TỌA ĐỘ ===
+        // Nếu dữ liệu bị hỏng (không có lat/lng hoặc bị NaN), lập tức bỏ qua để cứu bản đồ!
+        if (item.lat === undefined || item.lng === undefined || item.lat === null || item.lng === null || isNaN(item.lat) || isNaN(item.lng)) {
+            return; 
+        }
 
-        // Lọc theo ngày
         if (window.currentFilterDates && window.currentFilterDates.length > 0) {
             if (!item.date || !window.currentFilterDates.includes(item.date)) return;
         }
 
-        let cName = item.collectionName || 'Yêu thích';
+        // Ép kiểu dữ liệu về số thực (Float) để Leaflet không bao giờ bị lỗi
+        let pLat = parseFloat(item.lat);
+        let pLng = parseFloat(item.lng);
+        let key = `${pLat.toFixed(6)}_${pLng.toFixed(6)}`;
+        
+        if (!groupedLocations[key]) {
+            groupedLocations[key] = {
+                lat: pLat, lng: pLng, 
+                mainInfo: item, 
+                allEvents: []
+            };
+        }
+        groupedLocations[key].allEvents.push(item);
+    });
 
-        // Nếu nhóm layer chưa tồn tại -> Tạo mới và Đăng ký
+    // 3. VẼ MARKER CHO TỪNG NHÓM
+    Object.values(groupedLocations).forEach(group => {
+        let cName = group.mainInfo.collectionName || 'Yêu thích';
+        
         if (!customLayerGroups[cName]) {
             customLayerGroups[cName] = L.markerClusterGroup({ maxClusterRadius: 30 });
             map.addLayer(customLayerGroups[cName]);
-            
-            // Đăng ký tên bộ sưu tập vào Bảng điều khiển chung
-            if (window.mainLayerControl) {
-                window.mainLayerControl.addOverlay(customLayerGroups[cName], `💖 ${cName}`);
-            }
         }
 
-        // Tạo Icon
-        let pColor = item.color || '#8e44ad';
-        let pIcon = item.icon || 'fa-heart';
-        let customIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: `<div style="background-color:${pColor}; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; border:2px solid white;"><i class="fas ${pIcon}" style="font-size:12px;"></i></div>`,
-            iconSize: [28, 28]
-        });
-
-        // Tạo Popup (Đã sửa lỗi link Google/Yandex)
-        let gLink = `https://www.google.com/maps/search/?api=1&query=$${item.lat},${item.lng}`;
-        let yLink = `https://yandex.ru/maps/?pt=${item.lng},${item.lat}&z=16&l=map`;
+        let eventsListHTML = group.allEvents.map(ev => `
+            <div style="border-bottom: 1px dashed #eee; padding: 5px 0; font-size: 11px;">
+                <b style="color: #e67e22;">${ev.date ? '📅 ' + ev.date : '📌 Thông tin:'}</b><br>
+                <span style="display:block; margin-top:3px;">${typeof formatDescription === 'function' ? formatDescription(ev.desc) : (ev.desc || '')}</span>
+                <i class="fas fa-trash-alt" onclick="event.stopPropagation(); removeCustomPoint('${ev.id}')" 
+                   style="float:right; cursor:pointer; color:#ccc; margin-left:10px;" title="Xóa"></i>
+            </div>
+        `).join('');
+        // VÀ THAY BẰNG ĐOẠN NÀY:
+        // 1. Lấy tên gốc
+        let safeName = group.mainInfo.name ? group.mainInfo.name : "Địa điểm chưa có tên";
+        
+        // 2. LỌC SẠCH HTML: Dùng Regex xóa bỏ các thẻ như <i> tích xanh để không bị lọt vào ô Text Form
+        let plainName = safeName.replace(/<[^>]*>?/gm, '').trim();
+        
+        // 3. ÉP AN TOÀN: Xử lý cả dấu nháy đơn và nháy kép để không bao giờ làm vỡ nút bấm
+        let escapedName = plainName.replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
         let popupContent = `
-            <div class="popup-custom">
-                <h3 style="margin:0 0 5px 0;">${item.name}</h3>
-                <p style="font-size:12px; color:#666;">${item.desc || 'Không có mô tả'}</p>
-                <div style="display:flex; gap:5px; margin-top:10px;">
-                    <a href="${gLink}" target="_blank" style="flex:1; background:#4285F4; color:white; text-align:center; padding:5px; border-radius:4px; text-decoration:none; font-size:12px;">Google</a>
-                    <a href="${yLink}" target="_blank" style="flex:1; background:#ff0000; color:white; text-align:center; padding:5px; border-radius:4px; text-decoration:none; font-size:12px;">Yandex</a>
+            <div class="popup-custom" style="min-width:220px; max-height:300px; overflow-y:auto;">
+                <h3 style="margin:0; color:#8e44ad;">${safeName}</h3>
+                <div style="margin-top:10px; border-top: 2px solid #f1f1f1; padding-top:10px;">
+                    ${eventsListHTML}
                 </div>
-                <button onclick="removeCustomPoint('${item.id}')" style="width:100%; margin-top:8px; background:#f8f9fa; border:1px solid #ddd; padding:5px; border-radius:4px; cursor:pointer; font-size:11px;">🗑️ Xóa</button>
+                <div style="margin-top:15px; display:flex; gap:5px;">
+                    <button onclick="showCustomSaveForm(${group.lat}, ${group.lng}, '${escapedName}')" 
+                            style="flex:1; background:#27ae60; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size:11px;">
+                        <i class="fas fa-plus"></i> Thêm sự kiện
+                    </button>
+                </div>
             </div>
         `;
+        // ==========================================
+        // THIẾT KẾ ICON THÔNG MINH (PHÂN LOẠI PUBLIC / CÁ NHÂN / SHARE)
+        // ==========================================
+        let pColor = group.mainInfo.color || '#8e44ad';
+        let pIcon = group.mainInfo.icon || 'fa-heart';
 
-        // Vẽ điểm lên bản đồ
-        L.marker([item.lat, item.lng], {icon: customIcon})
-         .bindTooltip(item.name, {permanent: true, direction: 'bottom', className: 'custom-label'})
+        // 1. Nhận diện nguồn gốc địa điểm thông qua ID
+        let isPublic = group.mainInfo.id && group.mainInfo.id.startsWith('public_');
+        let isImported = group.mainInfo.id && group.mainInfo.id.startsWith('imported_');
+
+        // 2. Tùy chỉnh Hình dáng và Màu viền
+        let borderRadius = isPublic ? '8px' : '50%'; // Public hình vuông bo góc, Cá nhân hình tròn
+        let borderColor = isPublic ? '#f1c40f' : 'white'; // Public viền vàng, Cá nhân viền trắng
+        
+        // 3. Tạo Huy hiệu (Mini Badge) đính kèm ở góc phải bên dưới
+        let miniBadge = '';
+        if (isPublic) {
+            miniBadge = `<div style="position:absolute; bottom:-4px; right:-4px; background:#f1c40f; color:#333; width:14px; height:14px; border-radius:50%; font-size:9px; display:flex; align-items:center; justify-content:center; border:1px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="Địa điểm Công cộng"><i class="fas fa-globe-americas"></i></div>`;
+        } else if (isImported) {
+            miniBadge = `<div style="position:absolute; bottom:-4px; right:-4px; background:#3498db; color:white; width:14px; height:14px; border-radius:50%; font-size:8px; display:flex; align-items:center; justify-content:center; border:1px solid white; box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="Được bạn bè chia sẻ"><i class="fas fa-user-friends"></i></div>`;
+        }
+
+        // 4. Lắp ráp Icon
+        let customIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `
+                <div style="position:relative; width:28px; height:28px;">
+                    <div style="background-color:${pColor}; width:100%; height:100%; border-radius:${borderRadius}; display:flex; align-items:center; justify-content:center; color:white; border:2px solid ${borderColor}; box-shadow:0 2px 5px rgba(0,0,0,0.3); transition: 0.3s;">
+                        <i class="fas ${pIcon}"></i>
+                    </div>
+                    ${miniBadge}
+                </div>
+            `,
+            iconSize: [28, 28]
+        });
+        // Truyền chính xác dữ liệu số (Number) vào cho Leaflet
+        L.marker([group.lat, group.lng], {icon: customIcon})
+         .bindTooltip(`${safeName} (${group.allEvents.length})`, {
+             permanent: true,       // <--- THÊM DÒNG NÀY VÀO ĐÂY LÀ XONG!
+             direction: 'bottom', 
+             className: 'custom-label'
+         })
          .bindPopup(popupContent)
          .addTo(customLayerGroups[cName]);
     });
+
+    // 4. BÂY GIỜ MỚI ĐĂNG KÝ VÀO BẢNG ĐIỀU KHIỂN
+    for (let cName in customLayerGroups) {
+        let count = customLayerGroups[cName].getLayers().length;
+        
+        let prefixIcon = '💖'; // Mặc định là Bộ sưu tập Cá nhân
+        let displayName = cName;
+
+        // Nhận diện Layer Public (Có chứa hình 🌍)
+        if (cName.includes('🌍')) {
+            prefixIcon = '🌍';
+            // Xóa chữ 🌍 trong cName để tránh bị lặp (Ví dụ: 🌍 🌍 Bản đồ chung)
+            displayName = cName.replace('🌍', '').trim(); 
+        } 
+        // Nhận diện Layer được Share từ bạn bè
+        else if (cName.includes('(Từ bạn bè)')) {
+            prefixIcon = '🤝'; // Đổi thành icon Bắt tay hoặc 👥 Hai người
+            // Rút gọn tên cho đẹp, không cần chữ "Từ bạn bè" lặp lại trên bảng điều khiển
+            displayName = cName.replace('(Từ bạn bè)', '').trim(); 
+        }
+
+        // Tạo nhãn HTML với Icon đã được phân loại
+        let labelHtml = `${prefixIcon} <span style="font-weight: 500;">${displayName}</span> <span style="font-size:10px; color:#888; font-weight:normal; margin-left:3px;">(${count} điểm)</span>`;
+        
+        if (window.mainLayerControl) {
+            window.mainLayerControl.addOverlay(customLayerGroups[cName], labelHtml);
+        }
+    }
+
+    setTimeout(injectLayerToggleAll, 100);
 
     if (typeof updateEventSummary === 'function') updateEventSummary();
 };
@@ -879,14 +966,16 @@ legendControl.onAdd = function (map) {
                 <button onclick="openShareManager()" style="flex:1; background:#3498db; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size: 11px; font-weight: bold;">
                 <i class="fas fa-share-alt"></i> Quản lý Chia sẻ & QR
                 </button>
+                <button onclick="askForShareId()" style="flex:1; background:#8e44ad; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-size: 11px; font-weight: bold;"><i class="fas fa-download"></i> Nhập ID</button>
+           
             </div>
             <a href="https://forms.gle/R4MfQn31MQNFXGH67" target="_blank" class="btn-tour" style="display: block; background: #e74c3c; color: white; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; margin-top: 15px;">
                 <i class="fas fa-paper-plane"></i> Đăng ký Tour
             </a>
             <div style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
                 <label style="font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <input type="checkbox" id="toggle-all-labels" onchange="toggleGlobalLabels(this.checked)"> 
-                    <b>Hiển thị tất cả tên địa điểm</b>
+                    <input type="checkbox" id="show-labels-checkbox" checked onchange="toggleAllLabels(this.checked)"> 
+                    <label for="show-labels-checkbox">Hiển thị tất cả tên địa điểm</label>
                 </label>
             </div>
         </div>
@@ -1009,27 +1098,6 @@ window.updateEventSummary = function() {
         return;
     }
 
-    // Tạo các nút bấm HTML cho từng ngày có sự kiện
-    // let html = dates.map(d => {
-    //     // Highlight nếu ngày này đang được chọn
-    //     let isSelected = (d === window.currentFilterDate);
-    //     let style = isSelected 
-    //         ? 'background:#f4e8fa; color:#8e44ad; font-weight:bold; border-left: 3px solid #8e44ad;' 
-    //         : 'color:#555; background: #f9f9f9;';
-            
-    //     // Chuyển đổi định dạng YYYY-MM-DD sang DD/MM/YYYY cho đẹp
-    //     let parts = d.split('-');
-    //     let displayDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : d;
-
-    //     return `
-    //         <div onclick="event.stopPropagation(); applyDateFilter('${d}')" style="padding:4px 6px; border-radius:3px; margin-bottom:4px; cursor:pointer; transition: 0.2s; ${style}">
-    //              📅 ${displayDate}: <span style="float:right; background:#e74c3c; color:white; padding:1px 5px; border-radius:10px; font-size:9px;">${counts[d]}</span>
-    //         </div>
-    //     `;
-    // }).join('');
-
-
-    // Tạo các nút bấm HTML cho từng ngày
     let html = dates.map(d => {
         // KIỂM TRA MẢNG: Xem ngày này có nằm trong danh sách đang chọn không
         let isSelected = window.currentFilterDates.includes(d);
@@ -1069,17 +1137,23 @@ window.toggleGlobalLabels = function(show) {
         mapContainer.classList.remove('show-all-labels');
     }
 };
-// 1. HÀM MỞ TRÌNH QUẢN LÝ CHIA SẺ (Thay thế hàm cũ)
+// 1. HÀM MỞ TRÌNH QUẢN LÝ CHIA SẺ (Đã nâng cấp Chọn tất cả)
 window.openShareManager = function() {
-    // Lấy danh sách các Bộ sưu tập cá nhân khả dụng
     let categories = [...new Set(myCollectionsData.map(item => item.collectionName || 'Yêu thích'))];
-    
     if (categories.length === 0) return alert("Bạn chưa có địa điểm nào để chia sẻ!");
 
-    // Tạo nội dung HTML cho giao diện chọn (dùng Checkbox)
+    // Nút Checkbox "Chọn tất cả" trên cùng
+    let selectAllHTML = `
+        <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #eee; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="chk_all_share" checked onchange="toggleAllShare(this.checked)" style="width: 18px; height: 18px; cursor:pointer;">
+            <label for="chk_all_share" style="cursor:pointer; font-size: 14px; font-weight: bold; color: #e74c3c;">Chọn tất cả</label>
+        </div>
+    `;
+
+    // Danh sách các bộ sưu tập (Thêm onchange="checkShareAllStatus()")
     let checkboxHTML = categories.map(cat => `
         <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
-            <input type="checkbox" class="share-cat-check" value="${cat}" id="chk_${cat}" checked style="width: 18px; height: 18px; cursor:pointer;">
+            <input type="checkbox" class="share-cat-check" value="${cat}" id="chk_${cat}" checked style="width: 18px; height: 18px; cursor:pointer;" onchange="checkShareAllStatus()">
             <label for="chk_${cat}" style="cursor:pointer; font-size: 14px;">${cat}</label>
         </div>
     `).join('');
@@ -1088,6 +1162,7 @@ window.openShareManager = function() {
         <div id="share-modal" style="text-align: left; padding: 10px;">
             <h4 style="margin: 0 0 15px 0; color: #3498db;"><i class="fas fa-tasks"></i> Chọn Bộ sưu tập muốn chia sẻ</h4>
             <div style="max-height: 200px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                ${selectAllHTML}
                 ${checkboxHTML}
             </div>
             <button onclick="executeShareAction()" style="width: 100%; background: #3498db; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">
@@ -1096,154 +1171,108 @@ window.openShareManager = function() {
         </div>
     `;
 
-    // Hiển thị giao diện chọn (Bạn có thể nhắm vào một div popup hoặc dùng L.popup trung tâm)
     L.popup().setLatLng(map.getCenter()).setContent(managerHTML).openOn(map);
 };
 
+// 1.1 Hàm Hỗ trợ: Khi bấm "Chọn tất cả" -> Tick/Bỏ tick tất cả mục con
+window.toggleAllShare = function(isChecked) {
+    let checkboxes = document.querySelectorAll('.share-cat-check');
+    checkboxes.forEach(chk => chk.checked = isChecked);
+};
+
+// 1.2 Hàm Hỗ trợ: Khi bỏ tick 1 mục con -> Tự động bỏ tick "Chọn tất cả"
+window.checkShareAllStatus = function() {
+    let allCheckboxes = document.querySelectorAll('.share-cat-check');
+    let checkedCheckboxes = document.querySelectorAll('.share-cat-check:checked');
+    let masterCheckbox = document.getElementById('chk_all_share');
+    if (masterCheckbox) {
+        masterCheckbox.checked = (allCheckboxes.length === checkedCheckboxes.length);
+    }
+};
 // 2. HÀM THỰC THI CHIA SẺ (TỐI ƯU QR & AUTO COPY)
+
 // window.executeShareAction = function() {
 //     let selectedCats = Array.from(document.querySelectorAll('.share-cat-check:checked')).map(el => el.value);
-    
 //     if (selectedCats.length === 0) return alert("Vui lòng chọn ít nhất một bộ sưu tập!");
 
-//     // Lọc dữ liệu theo layer đã chọn và TỐI GIẢN để QR Code nhẹ hơn
+//     // 1. Lọc và Tối giản dữ liệu
 //     let filteredData = myCollectionsData.filter(item => selectedCats.includes(item.collectionName || 'Yêu thích'))
 //         .map(item => ({
-//             n: item.name,    // Rút gọn key 'name' thành 'n'
-//             d: item.desc,    // Rút gọn 'desc' thành 'd'
-//             c: item.collectionName,
-//             la: item.lat,
-//             ln: item.lng
+//             n: item.name, d: item.desc, c: item.collectionName,
+//             la: item.lat, ln: item.lng,
+//             dt: item.date || '' // Thêm trường ngày tháng vào chia sẻ
 //         }));
 
+//     // 2. Tạo Link
 //     let code = btoa(encodeURIComponent(JSON.stringify(filteredData)));
 //     let shareUrl = `${window.location.origin}${window.location.pathname}?share=${code}`;
 
-//     // Tự động Copy vào Clipboard
-//     navigator.clipboard.writeText(shareUrl).then(() => {
-//         // Tạo QR Code (Sử dụng API với dữ liệu đã rút gọn nên mã sẽ thưa và dễ quét hơn)
-//         let qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(shareUrl)}`;
-        
-//         let resultHTML = `
-//             <div style="text-align: center; padding: 10px;">
-//                 <p style="color: #27ae60; font-weight: bold;"><i class="fas fa-check-circle"></i> ĐÃ TỰ ĐỘNG COPY LINK!</p>
-//                 <img src="${qrUrl}" alt="QR Code" style="width: 180px; margin: 10px 0; border: 5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-//                 <p style="font-size: 11px; color: #666;">Quét mã trên để xem lộ trình chia sẻ.</p>
-//                 <button onclick="map.closePopup()" style="background: #eee; border: none; padding: 5px 15px; border-radius: 4px; cursor:pointer;">Đóng</button>
-//             </div>
-//         `;
-//         L.popup().setLatLng(map.getCenter()).setContent(resultHTML).openOn(map);
-//     });
-// };
-// 2. HÀM THỰC THI CHIA SẺ (TÍCH HỢP API RÚT GỌN LINK TỰ ĐỘNG)
-// window.executeShareAction = async function() {
-//     let selectedCats = Array.from(document.querySelectorAll('.share-cat-check:checked')).map(el => el.value);
+//     // 3. Tự động Copy
+//     navigator.clipboard.writeText(shareUrl).catch(() => console.log("Copy thủ công"));
     
-//     if (selectedCats.length === 0) return alert("Vui lòng chọn ít nhất một bộ sưu tập!");
+//     // 4. Hiển thị Popup và Vẽ QR Code bằng QRious
+//     let resultHTML = `
+//         <div style="text-align: center; padding: 10px;">
+//             <p style="color: #27ae60; font-weight: bold; margin-bottom: 5px;"><i class="fas fa-check-circle"></i> ĐÃ COPY LINK!</p>
+//             <input type="text" value="${shareUrl}" onclick="this.select()" readonly style="width: 100%; padding: 5px; text-align: center; border: 1px dashed #ccc; font-size: 11px; margin-bottom: 10px;">
+            
+//             <canvas id="qr-canvas" style="margin: 5px 0; border: 5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.1);"></canvas>
+            
+//             <button onclick="map.closePopup()" style="background: #eee; border: none; padding: 8px 20px; border-radius: 4px; cursor:pointer; font-weight: bold; margin-top: 10px;">Đóng</button>
+//         </div>
+//     `;
+//     L.popup().setLatLng(map.getCenter()).setContent(resultHTML).openOn(map);
 
-//     // Hiển thị trạng thái Loading để người dùng chờ API xử lý
-//     let btnSubmit = document.querySelector('#share-modal button');
-//     let originalBtnText = btnSubmit.innerHTML;
-//     btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang tạo link rút gọn...';
-//     btnSubmit.disabled = true;
-
-//     try {
-//         // 1. Lọc và Tối giản dữ liệu
-//         let filteredData = myCollectionsData.filter(item => selectedCats.includes(item.collectionName || 'Yêu thích'))
-//             .map(item => ({
-//                 n: item.name,
-//                 d: item.desc,
-//                 c: item.collectionName,
-//                 la: item.lat,
-//                 ln: item.lng
-//             }));
-
-//         // 2. Tạo Link gốc (Dài)
-//         let code = btoa(encodeURIComponent(JSON.stringify(filteredData)));
-//         let longShareUrl = `${window.location.origin}${window.location.pathname}?share=${code}`;
-
-//         // 3. Gọi API is.gd để rút gọn Link
-//         let finalShareUrl = longShareUrl; // Fallback: mặc định dùng link dài nếu API lỗi
-//         try {
-//             let response = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(longShareUrl)}`);
-//             let data = await response.json();
-//             if (data.shorturl) {
-//                 finalShareUrl = data.shorturl; // Lấy link siêu ngắn thành công!
-//             }
-//         } catch (apiError) {
-//             console.warn("Không thể rút gọn link, sử dụng link gốc.", apiError);
-//         }
-
-//         // 4. Copy và Hiển thị QR Code (Từ link ngắn)
-//         await navigator.clipboard.writeText(finalShareUrl);
-        
-//         let qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(finalShareUrl)}`;
-        
-//         let resultHTML = `
-//             <div style="text-align: center; padding: 10px;">
-//                 <p style="color: #27ae60; font-weight: bold; margin-bottom: 5px;"><i class="fas fa-check-circle"></i> ĐÃ TỰ ĐỘNG COPY LINK NGẮN!</p>
-//                 <input type="text" value="${finalShareUrl}" readonly style="width: 100%; padding: 5px; text-align: center; border: 1px dashed #ccc; background: #f9f9f9; font-size: 11px; margin-bottom: 10px;">
-                
-//                 <img src="${qrUrl}" alt="QR Code" style="width: 180px; margin: 5px 0; border: 5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-                
-//                 <p style="font-size: 11px; color: #666; margin-top: 5px;">Mã QR giờ đã rất thưa và dễ quét.</p>
-//                 <button onclick="map.closePopup()" style="background: #eee; border: none; padding: 8px 20px; border-radius: 4px; cursor:pointer; font-weight: bold; margin-top: 10px;">Đóng</button>
-//             </div>
-//         `;
-//         L.popup().setLatLng(map.getCenter()).setContent(resultHTML).openOn(map);
-
-//     } catch (error) {
-//         alert("Đã xảy ra lỗi khi tạo chia sẻ!");
-//         console.error(error);
-//     } finally {
-//         // Phục hồi lại nút bấm
-//         if(btnSubmit) {
-//             btnSubmit.innerHTML = originalBtnText;
-//             btnSubmit.disabled = false;
-//         }
-//     }
+//     // Vẽ QR ngay sau khi Popup mở ra (delay 100ms để DOM kịp load)
+//     setTimeout(() => {
+//         new QRious({
+//             element: document.getElementById('qr-canvas'),
+//             value: shareUrl,
+//             size: 220, // Kích thước QR
+//             level: 'L' // Giảm mức độ sửa lỗi để mã thưa và dễ quét hơn với link dài
+//         });
+//     }, 100);
 // };
 
-window.executeShareAction = function() {
+window.executeShareAction = async function() {
     let selectedCats = Array.from(document.querySelectorAll('.share-cat-check:checked')).map(el => el.value);
     if (selectedCats.length === 0) return alert("Vui lòng chọn ít nhất một bộ sưu tập!");
 
-    // 1. Lọc và Tối giản dữ liệu
-    let filteredData = myCollectionsData.filter(item => selectedCats.includes(item.collectionName || 'Yêu thích'))
-        .map(item => ({
-            n: item.name, d: item.desc, c: item.collectionName,
-            la: item.lat, ln: item.lng,
-            dt: item.date || '' // Thêm trường ngày tháng vào chia sẻ
-        }));
-
-    // 2. Tạo Link
-    let code = btoa(encodeURIComponent(JSON.stringify(filteredData)));
-    let shareUrl = `${window.location.origin}${window.location.pathname}?share=${code}`;
-
-    // 3. Tự động Copy
-    navigator.clipboard.writeText(shareUrl).catch(() => console.log("Copy thủ công"));
+    // 1. Lọc dữ liệu cần chia sẻ
+    let filteredData = myCollectionsData.filter(item => selectedCats.includes(item.collectionName || 'Yêu thích'));
     
-    // 4. Hiển thị Popup và Vẽ QR Code bằng QRious
+    // 2. Tạo một ID ngẫu nhiên, duy nhất cho lượt chia sẻ này
+    let shareId = 'TOUR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    let jsonDataStr = JSON.stringify(filteredData);
+
+    // Sử dụng CONFIG để tạo Data gửi đi
+    let formData = new URLSearchParams();
+    formData.append(CONFIG.FORM_SHARE.ENTRY_SHARE_ID, shareId);
+    formData.append(CONFIG.FORM_SHARE.ENTRY_JSON, jsonDataStr);
+
+    try {
+        fetch(CONFIG.FORM_SHARE.URL, { method: "POST", mode: "no-cors", body: formData });
+    } catch(e) { console.log("Lỗi mạng", e); }
+
+    // 4. Tạo link rút gọn chứa ID
+    let shareUrl = `${window.location.origin}${window.location.pathname}?id=${shareId}`;
+    
+    // Tự động copy và hiển thị QR Code ... (Giữ nguyên phần vẽ QRious của bạn)
+    navigator.clipboard.writeText(shareUrl).catch(()=>console.log("Copy tay"));
+    
     let resultHTML = `
         <div style="text-align: center; padding: 10px;">
-            <p style="color: #27ae60; font-weight: bold; margin-bottom: 5px;"><i class="fas fa-check-circle"></i> ĐÃ COPY LINK!</p>
-            <input type="text" value="${shareUrl}" onclick="this.select()" readonly style="width: 100%; padding: 5px; text-align: center; border: 1px dashed #ccc; font-size: 11px; margin-bottom: 10px;">
-            
+            <p style="color: #27ae60; font-weight: bold;"><i class="fas fa-check-circle"></i> ĐÃ TẠO MÃ CLOUD & COPY LINK!</p>
+            <p style="font-size:12px; color:#555;">ID của bạn: <b>${shareId}</b></p>
+            <input type="text" value="${shareUrl}" onclick="this.select()" readonly style="width:100%; padding:5px; text-align:center; border:1px dashed #ccc; font-size:11px;">
             <canvas id="qr-canvas" style="margin: 5px 0; border: 5px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.1);"></canvas>
-            
-            <button onclick="map.closePopup()" style="background: #eee; border: none; padding: 8px 20px; border-radius: 4px; cursor:pointer; font-weight: bold; margin-top: 10px;">Đóng</button>
+            <p style="font-size:10px; color:#888;">(Link rút gọn, mã QR thưa, tải siêu nhanh)</p>
         </div>
     `;
     L.popup().setLatLng(map.getCenter()).setContent(resultHTML).openOn(map);
 
-    // Vẽ QR ngay sau khi Popup mở ra (delay 100ms để DOM kịp load)
     setTimeout(() => {
-        new QRious({
-            element: document.getElementById('qr-canvas'),
-            value: shareUrl,
-            size: 220, // Kích thước QR
-            level: 'L' // Giảm mức độ sửa lỗi để mã thưa và dễ quét hơn với link dài
-        });
+        new QRious({ element: document.getElementById('qr-canvas'), value: shareUrl, size: 200, level: 'L' });
     }, 100);
 };
 // --- DANH SÁCH CÁC ICON KHẢ DỤNG ---
@@ -1313,3 +1342,251 @@ document.addEventListener('DOMContentLoaded', function() {
         renderCustomSavedPoints();
     }, 500); // Delay nhẹ để đảm bảo Map và Control đã render xong
 });
+
+// Hàm xử lý khi tick/bỏ tick ô "Bật/Tắt tất cả"
+window.toggleAllLayers = function(isTurnOn) {
+    // Xử lý các Bộ sưu tập cá nhân / Public / Share
+    if (typeof customLayerGroups !== 'undefined') {
+        for (let cat in customLayerGroups) {
+            if (isTurnOn) {
+                map.addLayer(customLayerGroups[cat]);
+            } else {
+                map.removeLayer(customLayerGroups[cat]);
+            }
+        }
+    }
+    
+    // Xử lý các Layer từ Google Sheets (nếu bạn có dùng layerGroups riêng)
+    if (typeof layerGroups !== 'undefined') {
+        for (let cat in layerGroups) {
+            if (isTurnOn) {
+                map.addLayer(layerGroups[cat]);
+            } else {
+                map.removeLayer(layerGroups[cat]);
+            }
+        }
+    }
+};
+// ==========================================
+// HỆ THỐNG TÌM KIẾM THÔNG MINH (LOCAL + OSM)
+// ==========================================
+
+// 1. Tạo Giao diện Thanh tìm kiếm trên bản đồ
+let searchControl = L.control({position: 'topleft'});
+searchControl.onAdd = function() {
+    let div = L.DomUtil.create('div', 'custom-search-wrapper');
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+    
+    div.innerHTML = `
+        <i class="fas fa-search custom-search-icon"></i>
+        <input type="text" id="smart-search-input" class="custom-search-input" placeholder="Tìm tên đường, địa điểm, sự kiện..." autocomplete="off">
+        <div id="search-results" class="search-suggestions"></div>
+    `;
+    return div;
+};
+searchControl.addTo(map);
+
+// 2. Thuật toán Debounce (Chống Spam API)
+let searchTimeout = null;
+document.getElementById('smart-search-input').addEventListener('input', function(e) {
+    let query = e.target.value.trim();
+    let resultsDiv = document.getElementById('search-results');
+    
+    if (query.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+
+    clearTimeout(searchTimeout);
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = '<div style="padding:10px; text-align:center; color:#888;"><i class="fas fa-spinner fa-spin"></i> Đang tìm...</div>';
+
+    // Đợi 500ms sau khi ngừng gõ mới bắt đầu tìm
+    searchTimeout = setTimeout(() => performHybridSearch(query), 500);
+});
+
+// 3. Hàm Tìm kiếm Cốt lõi
+async function performHybridSearch(query) {
+    let resultsDiv = document.getElementById('search-results');
+    let finalResults = [];
+    let queryLower = query.toLowerCase();
+
+    // --- ƯU TIÊN 1: TÌM TRONG DỮ LIỆU LOCAL (Nhanh, Chính xác) ---
+    if (window.myCollectionsData) {
+        let localMatches = window.myCollectionsData.filter(item => 
+            (item.name && item.name.toLowerCase().includes(queryLower)) || 
+            (item.desc && item.desc.toLowerCase().includes(queryLower))
+        );
+        
+        localMatches.forEach(match => {
+            finalResults.push({
+                type: 'local', id: match.id, lat: match.lat, lng: match.lng,
+                title: match.name, subtitle: match.collectionName || 'Bộ sưu tập',
+                icon: 'fa-star'
+            });
+        });
+    }
+
+    // --- ƯU TIÊN 2: TÌM QUA OPENSTREETMAP (Địa chỉ, Đường phố) ---
+    // Giới hạn 5 kết quả, ưu tiên tìm quanh khu vực bản đồ đang hiển thị
+    try {
+        let bounds = map.getBounds();
+        let viewBox = `${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()},${bounds.getSouth()}`;
+        let osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=${viewBox}&bounded=0&limit=5`;
+        
+        let response = await fetch(osmUrl);
+        let osmData = await response.json();
+        
+        osmData.forEach(item => {
+            finalResults.push({
+                type: 'osm', id: item.place_id, lat: item.lat, lng: item.lon,
+                title: item.display_name.split(',')[0], // Lấy tên chính
+                subtitle: item.display_name,            // Lấy địa chỉ đầy đủ
+                icon: 'fa-map-marker-alt'
+            });
+        });
+    } catch(e) { console.error("Lỗi tìm kiếm OSM:", e); }
+
+    // --- RENDER KẾT QUẢ ---
+    if (finalResults.length === 0) {
+        resultsDiv.innerHTML = '<div style="padding:10px; text-align:center; color:#e74c3c;">Không tìm thấy kết quả.</div>';
+        return;
+    }
+
+    resultsDiv.innerHTML = finalResults.map(item => `
+        <div class="search-item" onclick="flyToSearchResult(${item.lat}, ${item.lng}, '${item.title.replace(/'/g, "\\'")}', '${item.type}')">
+            <i class="fas ${item.icon} search-item-icon ${item.type === 'local' ? 'search-local' : 'search-osm'}"></i>
+            <div>
+                <b style="color:#333;">${item.title}</b><br>
+                <span style="color:#7f8c8d; font-size:10px;">${item.subtitle.substring(0, 50)}...</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 4. Xử lý khi người dùng Click vào một kết quả
+let tempSearchMarker = null;
+window.flyToSearchResult = function(lat, lng, title, type) {
+    document.getElementById('search-results').style.display = 'none';
+    map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+
+    if (tempSearchMarker) map.removeLayer(tempSearchMarker);
+
+    if (type === 'osm') {
+        // Nếu là địa điểm mới từ OSM, tạo marker tạm và hiện form lưu
+        tempSearchMarker = L.marker([lat, lng]).addTo(map)
+            .bindPopup(`
+                <div style="text-align:center;">
+                    <b>${title}</b><br>
+                    <button onclick="showCustomSaveForm(${lat}, ${lng}, '${title}')" style="margin-top:10px; background:#27ae60; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">
+                        <i class="fas fa-plus"></i> Thêm vào bộ sưu tập
+                    </button>
+                </div>
+            `).openPopup();
+    }
+};
+
+// ==========================================
+// CÀI ĐẶT VỊ TRÍ MẶC ĐỊNH (SET DEFAULT VIEW)
+// ==========================================
+let settingsControl = L.control({position: 'topleft'});
+settingsControl.onAdd = function() {
+    let div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    div.innerHTML = `
+        <a href="#" title="Cài đặt khu vực mặc định" onclick="event.preventDefault(); saveDefaultLocation();" style="font-size:18px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#2c3e50; text-decoration:none;">
+            <i class="fas fa-home"></i>
+        </a>
+    `;
+    return div;
+};
+settingsControl.addTo(map);
+
+window.saveDefaultLocation = function() {
+    let currentCenter = map.getCenter();
+    let currentZoom = map.getZoom();
+    
+    let confirmSave = confirm("Bạn có muốn đặt khu vực ĐANG HIỂN THỊ trên bản đồ làm Khu vực Mặc định khi mở web không?");
+    if (confirmSave) {
+        let locationData = { lat: currentCenter.lat, lng: currentCenter.lng, zoom: currentZoom };
+        localStorage.setItem('userDefaultLocation', JSON.stringify(locationData));
+        alert("✅ Đã lưu khu vực mặc định thành công! Lần sau mở web sẽ tự động zoom về đây.");
+    }
+};
+
+// ==========================================
+// Hàm Bật/Tắt tên trực tiếp từ Checkbox Custom
+window.toggleAllLabels = function(isVisible) {
+    let mapDiv = document.getElementById('map');
+    if (!mapDiv) return;
+    
+    if (isVisible) {
+        // Nếu tick -> Xóa class ẩn đi -> Hiện tên
+        mapDiv.classList.remove('hide-all-labels');
+    } else {
+        // Nếu bỏ tick -> Thêm class ẩn vào -> Tắt tên
+        mapDiv.classList.add('hide-all-labels');
+    }
+};
+
+// Đảm bảo đồng bộ trạng thái khi vừa load trang web xong
+document.addEventListener('DOMContentLoaded', function() {
+    let checkbox = document.querySelector('input[onchange*="toggleAllLabels"]');
+    if (checkbox) {
+        toggleAllLabels(checkbox.checked);
+    }
+});
+// ==========================================
+// TÍNH NĂNG: BẬT/TẮT TẤT CẢ LAYER TRONG BẢNG ĐIỀU KHIỂN
+// ==========================================
+
+// Hàm bơm giao diện Checkbox vào đầu bảng điều khiển Leaflet
+window.injectLayerToggleAll = function() {
+    let controlContainer = document.querySelector('.leaflet-control-layers');
+    let formContainer = document.querySelector('.leaflet-control-layers-list');
+
+    if (controlContainer && formContainer && !document.getElementById('toggle-all-layers-container')) {
+        let toggleDiv = document.createElement('div');
+        toggleDiv.id = 'toggle-all-layers-container';
+        toggleDiv.style.borderBottom = '1px solid #ddd';
+        toggleDiv.style.marginBottom = '8px';
+        toggleDiv.style.padding = '8px 10px';
+        toggleDiv.style.background = '#f8f9fa';
+
+        L.DomEvent.disableClickPropagation(toggleDiv); // Chặn click xuyên thấu
+        
+        toggleDiv.innerHTML = `
+            <label style="display: flex; align-items: center; font-weight: bold; color: #2c3e50; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="toggle-all-layers-checkbox" checked onchange="toggleAllLayers(this.checked)" style="margin-right: 8px; cursor: pointer; width: 14px; height: 14px;">
+                <span>Tất cả Layer</span>
+            </label>
+        `;
+        
+        // Chèn lên trên cùng của bảng điều khiển (Bên trên danh sách Leaflet)
+        controlContainer.insertBefore(toggleDiv, formContainer);
+    }
+};
+
+// Hàm xử lý Logic khi người dùng tick/bỏ tick
+window.toggleAllLayers = function(isTurnOn) {
+    // 1. Ẩn/Hiện Layer Cá nhân & Public
+    if (typeof customLayerGroups !== 'undefined') {
+        for (let cat in customLayerGroups) {
+            if (isTurnOn) map.addLayer(customLayerGroups[cat]);
+            else map.removeLayer(customLayerGroups[cat]);
+        }
+    }
+    
+    // 2. Ẩn/Hiện Layer từ Google Sheets
+    // (Trong code cũ của bạn gọi là 'layerGroups' nhưng thực tế tên biến là 'categoryLayers'. Tôi đã sửa lại cho chuẩn!)
+    if (typeof categoryLayers !== 'undefined') {
+        for (let cat in categoryLayers) {
+            if (isTurnOn) map.addLayer(categoryLayers[cat]);
+            else map.removeLayer(categoryLayers[cat]);
+        }
+    }
+
+    // 3. ĐỒNG BỘ GIAO DIỆN: Ép các dấu tick trong bảng điều khiển Leaflet khớp với trạng thái thực tế
+    let leafletCheckboxes = document.querySelectorAll('.leaflet-control-layers-overlays input[type="checkbox"]');
+    leafletCheckboxes.forEach(chk => chk.checked = isTurnOn);
+};
