@@ -328,7 +328,7 @@ Papa.parse(sheetCSV_URL, {
                         // 2. Xử lý danh mục & Nút chỉ đường
                         let cats = row.Category.split(';').map(c => c.trim());
                         let tagsHTML = cats.map(c => `<span class="category-badge" style="background:#333; margin-right:4px;">${c}</span>`).join('');
-                        let routingLink = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+                        let routingLink = `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
 
                         // 3. Xử lý Reviews
                         let reviewsHTML = '';
@@ -577,11 +577,11 @@ window.showCustomSaveForm = function(lat, lng, defaultName = "", defaultId = nul
                 <a href="${gLink}" target="_blank" style="background:#4285F4; flex:1; padding:8px; color:white; text-align:center; text-decoration:none; border-radius:4px;"><i class="fab fa-google"></i> Google</a>
             </div>
 
-            <button onclick="savePointDataWithLogic('${markerId}', ${lat}, ${lng}, false)" style="width:100%; background:#9b59b6; border:none; padding:10px; border-radius:4px; color:white; font-weight:bold; cursor:pointer; margin-bottom: 5px;">
+            <button onclick="savePointDataWithLogic('${markerId}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, false)" style="width:100%; background:#9b59b6; border:none; padding:10px; border-radius:4px; color:white; font-weight:bold; cursor:pointer; margin-bottom: 5px;">
                 <i class="fas fa-lock"></i> Chỉ lưu vào máy của tôi
             </button>
 
-            <button onclick="savePointDataWithLogic('${markerId}', ${lat}, ${lng}, true)" style="width: 100%; background: #27ae60; color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; border: 2px solid #2ecc71;">
+            <button onclick="savePointDataWithLogic('${markerId}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, true)" style="width: 100%; background: #27ae60; color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; border: 2px solid #2ecc71;">
                 <i class="fas fa-globe-asia"></i> Lưu máy & Đóng góp Public
             </button>
         </div>
@@ -630,7 +630,7 @@ window.savePointDataWithLogic = function(markerId, lat, lng, isPublicShare = fal
     if (isPublicShare && typeof CONFIG !== 'undefined') {
         let formData = new URLSearchParams();
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_NAME, nameVal);
-        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat}, ${lng}`);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         // formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, finalCategory);
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_DESC, descVal);
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_DATE, dateVal);
@@ -684,7 +684,7 @@ window.savePointData = function(markerId, lat, lng, isPublicShare = false) {
     if (isPublicShare) {
         let formData = new URLSearchParams();
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_NAME, nameVal);
-        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat}, ${lng}`);
+        formData.append(CONFIG.FORM_PUBLIC.ENTRY_COORDS, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_CAT, catVal);
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_DESC, descVal);
         formData.append(CONFIG.FORM_PUBLIC.ENTRY_DATE, dateVal);
@@ -1558,7 +1558,7 @@ window.flyToSearchResult = function(lat, lng, title, type) {
             .bindPopup(`
                 <div style="text-align:center;">
                     <b>${title}</b><br>
-                    <button onclick="showCustomSaveForm(${lat}, ${lng}, '${title}')" style="margin-top:10px; background:#27ae60; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">
+                    <button onclick="showCustomSaveForm(${lat.toFixed(6)}, ${lng.toFixed(6)}, '${title}')" style="margin-top:10px; background:#27ae60; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">
                         <i class="fas fa-plus"></i> Thêm vào bộ sưu tập
                     </button>
                 </div>
