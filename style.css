@@ -436,7 +436,7 @@ body, html {
     max-height: 250px;
     overflow-y: auto;
     display: none;
-    z-index: 1000;
+    z-index: 10000 !important;
 }
 .search-item {
     padding: 10px 15px;
@@ -457,3 +457,24 @@ body, html {
     display: none !important;
     opacity: 0 !important;
 }
+/* CSS Thanh tìm kiếm thông minh */
+.custom-search-wrapper { 
+    position: relative; width: 38px; height: 38px; background: white; 
+    border-radius: 19px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
+    transition: all 0.3s ease; overflow: hidden; display: flex; align-items: center;
+}
+.custom-search-wrapper.active { width: 300px; max-width: 90vw; }
+.custom-search-input { 
+    width: 100%; padding: 10px 15px 10px 38px; border: none; 
+    background: transparent; outline: none; font-size: 14px; opacity: 0; transition: 0.3s;
+}
+.custom-search-wrapper.active .custom-search-input { opacity: 1; }
+.custom-search-icon { 
+    position: absolute; left: 12px; color: #888; cursor: pointer; z-index: 5; font-size: 16px;
+}
+.search-suggestions { 
+    position: absolute; top: 45px; left: 0; width: 300px; max-width: 90vw; 
+    background: white; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+    max-height: 300px; overflow-y: auto; display: none; z-index: 10000 !important;
+}
+.history-title { padding: 8px 15px; font-size: 11px; color: #888; background: #f9f9f9; font-weight: bold; }
